@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -81,7 +82,14 @@ public class DashboardService {
         List<WeeklyTrendPoint> trend = buildMockTrend(rows.size());
         List<ContractorRow> contractorRows = buildContractorRows(contractors, emailByEmpCode);
         List<PtoRow> ptoMismatches = buildPtoMismatchRows(ptoRows);
-        AiInsights insights = insightsService.generate(contractors, rows.size());
+        // Cache AI insights by (path + mtime) — same report file → reuse the LLM response.
+        String insightsCacheKey;
+        try {
+            insightsCacheKey = path.toString() + "@" + Files.getLastModifiedTime(path).toMillis();
+        } catch (IOException e) {
+            insightsCacheKey = null;
+        }
+        AiInsights insights = insightsService.generate(contractors, rows.size(), insightsCacheKey);
         List<ReportTab> tabs = buildReportTabs(rows.size(), ptoMismatchCount);
 
         log.info("Dashboard summary built: {} discrepancy rows, {} contractors, {} PTO mismatches",

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,11 +23,23 @@ import java.util.regex.Pattern;
  *
  * Uses @Lazy on ChatClient for the same reason as EmailDraftingService — breaks the
  * tool-callback ⇆ ChatModel cycle that the MCP server's auto-config introduces.
+ *
+ * <h3>Prompt size + rate limits</h3>
+ * Production reports may carry thousands of flagged rows and tens of contractors.
+ * We only send a SLIM TOP-N view of the contractors to the LLM (counts only, no per-row
+ * details) so the prompt stays in the low-thousands of tokens regardless of report size.
+ *
+ * <h3>Caching</h3>
+ * Results are cached by (report path + last-modified time) — same report file → same
+ * insights, no extra LLM call. Cache entries are only stored after a successful LLM
+ * response, so rate-limit fallbacks always retry on the next request.
  */
 @Service
 public class AiInsightsService {
 
     private static final Logger log = LoggerFactory.getLogger(AiInsightsService.class);
+
+    private static final int TOP_N_CONTRACTORS = 10;
 
     private static final String PROMPT = """
             You analyse weekly Beeline-vs-Fusion timesheet reconciliations. Produce THREE short
@@ -50,11 +63,11 @@ public class AiInsightsService {
             - <bullet>
             - <bullet>
 
-            Input data (JSON, sorted by total discrepancies descending):
+            Top {topN} flagged contractors by total discrepancies (JSON, summary only):
             {summariesJson}
 
-            Total flagged rows: {totalRows}
-            Total contractors flagged: {totalContractors}
+            Total flagged rows in full report: {totalRows}
+            Total contractors flagged in full report: {totalContractors}
             """;
 
     private static final Pattern SECTION_RE = Pattern.compile(
@@ -63,13 +76,18 @@ public class AiInsightsService {
 
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
+    private final Map<String, AiInsights> cache = new ConcurrentHashMap<>();
 
     public AiInsightsService(@Lazy ChatClient chatClient, ObjectMapper objectMapper) {
         this.chatClient = chatClient;
         this.objectMapper = objectMapper;
     }
 
-    public AiInsights generate(List<ContractorDiscrepancySummary> summaries, int totalRows) {
+    public AiInsights generate(
+            List<ContractorDiscrepancySummary> summaries,
+            int totalRows,
+            String cacheKey) {
+
         if (summaries.isEmpty()) {
             return new AiInsights(
                     List.of("No discrepancies in the latest report — nothing to flag."),
@@ -77,9 +95,24 @@ public class AiInsightsService {
                     List.of());
         }
 
+        if (cacheKey != null) {
+            AiInsights cached = cache.get(cacheKey);
+            if (cached != null) {
+                log.debug("AI insights cache hit for {}", cacheKey);
+                return cached;
+            }
+        }
+
+        // Slim view: counts only, no per-row details. Caps prompt size dramatically
+        // for big reports (e.g. 67 contractors × 18 rows each → just 10 contractor totals).
+        List<ContractorSlim> slim = summaries.stream()
+                .limit(TOP_N_CONTRACTORS)
+                .map(ContractorSlim::from)
+                .toList();
+
         String json;
         try {
-            json = objectMapper.writeValueAsString(summaries);
+            json = objectMapper.writeValueAsString(slim);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialise summaries for insights", e);
         }
@@ -88,6 +121,7 @@ public class AiInsightsService {
         try {
             response = chatClient.prompt()
                     .user(u -> u.text(PROMPT).params(Map.of(
+                            "topN", String.valueOf(slim.size()),
                             "summariesJson", json,
                             "totalRows", String.valueOf(totalRows),
                             "totalContractors", String.valueOf(summaries.size()))))
@@ -95,11 +129,17 @@ public class AiInsightsService {
                     .content();
         } catch (Exception e) {
             log.warn("AI insights call failed, falling back to deterministic summary: {}", e.getMessage());
+            // Don't cache the fallback — next request may succeed.
             return fallback(summaries);
         }
 
         log.debug("AI insights raw response:\n{}", response);
-        return parse(response, summaries);
+        AiInsights result = parse(response, summaries);
+
+        if (cacheKey != null) {
+            cache.put(cacheKey, result);
+        }
+        return result;
     }
 
     private AiInsights parse(String response, List<ContractorDiscrepancySummary> summaries) {
@@ -120,7 +160,6 @@ public class AiInsightsService {
             }
         }
 
-        // If the model returned an unparseable shape, fall back so the UI is never empty.
         if (topIssues.isEmpty() && repeatOffenders.isEmpty() && highRiskProjects.isEmpty()) {
             return fallback(summaries);
         }
@@ -156,5 +195,24 @@ public class AiInsightsService {
         if (repeat.isEmpty()) repeat.add("No repeat offenders this week.");
         risk.add("Highest-volume contractors are the priority for follow-up.");
         return new AiInsights(top, repeat, risk);
+    }
+
+    /** Slim view used in the LLM prompt — counts only, no per-row details. */
+    private record ContractorSlim(
+            String employeeCode,
+            String employeeName,
+            int under,
+            int over,
+            int missing,
+            int total) {
+        static ContractorSlim from(ContractorDiscrepancySummary c) {
+            return new ContractorSlim(
+                    c.employeeCode(),
+                    c.employeeName(),
+                    c.underReportCount(),
+                    c.overReportCount(),
+                    c.noRecordCount(),
+                    c.total());
+        }
     }
 }
