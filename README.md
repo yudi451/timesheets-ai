@@ -5,7 +5,7 @@ Reads a `Beeline_Fusion_Report.xlsx`, finds highlighted rows (red / yellow / tea
 asks Claude to draft a manager-ready summary, and ships it via SendGrid. Comes with a
 **React dashboard**, **MCP server** for chat-driven access, and a CLI for scheduled jobs.
 
-**Stack:** Java 21 · Spring Boot 3.5 · Spring AI 1.0.5 · Apache POI · SendGrid ·
+**Stack:** Java 17+ · Spring Boot 3.5 · Spring AI 1.0.5 · Apache POI · SendGrid ·
 React 19 · Vite · Tailwind · Recharts.
 
 ---
@@ -14,7 +14,7 @@ React 19 · Vite · Tailwind · Recharts.
 
 | Tool | Version | Install |
 | --- | --- | --- |
-| **Java JDK** | 21+ | `brew install openjdk@21` or [Temurin](https://adoptium.net/) |
+| **Java JDK** | 17+ | `brew install openjdk@17` or [Temurin](https://adoptium.net/) |
 | **Node.js** | 20+ | `brew install node` |
 | **Anthropic API key** | — | Create at https://console.anthropic.com/settings/keys (free $5 credit on signup) |
 | **SendGrid API key + verified sender** | — | https://signup.sendgrid.com (free 100 emails/day) — see [SendGrid setup](#sendgrid-setup) below |
