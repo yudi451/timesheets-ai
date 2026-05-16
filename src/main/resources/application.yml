@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: timesheets-ai
+  main:
+    banner-mode: off
+  ai:
+    # We only use chat models. Disable all other auto-configured sub-models so the
+    # OpenAI / Anthropic starters don't try to instantiate (and validate keys for)
+    # speech, transcription, image, embedding, or moderation clients we never call.
+    model:
+      # Active chat provider. Set to 'anthropic' or 'openai'. The OTHER provider's
+      # chat auto-configuration is skipped, so you don't need both API keys.
+      chat: anthropic
+      embedding: none
+      image: none
+      audio:
+        speech: none
+        transcription: none
+      moderation: none
+    mcp:
+      server:
+        enabled: true
+        name: timesheets-ai-mcp
+        version: 0.0.1
+        type: SYNC
+        sse-endpoint: /sse
+        sse-message-endpoint: /mcp/message
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          model: claude-sonnet-4-6
+          temperature: 0.3
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: gpt-4o
+          temperature: 0.3
+
+server:
+  port: 8080
+
+app:
+  email:
+    sendgrid-api-key: ${SENDGRID_API_KEY:}
+    from-address: ${EMAIL_FROM:noreply@example.com}
+    from-name: Timesheets AI
+    default-recipient: uday.rajpurohit@gmail.com
+  excel:
+    # Default path the MCP tools use when no explicit path is passed
+    default-path: ./sample-data/sample-beeline-fusion-report.xlsx
+    # Sheet name inside the workbook to scan
+    sheet-name: Weekly Timesheet
+    # 0-indexed column that holds the highlighted Fusion Reported Hours value
+    fusion-hours-column-index: 6
+
+logging:
+  level:
+    root: INFO
+    com.timesheets.ai: DEBUG

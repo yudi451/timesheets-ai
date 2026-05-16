@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/api/dashboard.ts","./src/components/aiinsightspanel.tsx","./src/components/contractorgrid.tsx","./src/components/discrepancypie.tsx","./src/components/kpicards.tsx","./src/components/reportstabs.tsx","./src/components/weeklytrendline.tsx"],"version":"5.9.3"}
