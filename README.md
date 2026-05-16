@@ -1,151 +1,186 @@
-# Timesheets AI — MCP server for Beeline vs Fusion discrepancies
+# Timesheets AI
 
-Java 21 + Spring Boot 3.5 + Spring AI 1.0.5. Scans a `Beeline_Fusion_Report.xlsx`,
-finds the rows that are highlighted (red / yellow / teal-NA / grey-NA), asks an
-LLM to draft a manager-ready email, and ships it via SendGrid.
+AI-powered timesheet discrepancy detection for Beeline vs Fusion reconciliation.
+Reads a `Beeline_Fusion_Report.xlsx`, finds highlighted rows (red / yellow / teal-NA / grey-NA),
+asks Claude to draft a manager-ready summary, and ships it via SendGrid. Comes with a
+**React dashboard**, **MCP server** for chat-driven access, and a CLI for scheduled jobs.
 
-The whole pipeline is exposed as **MCP tools**, so you can drive it conversationally
-from Claude Desktop, Claude Code, or any MCP-aware client.
+**Stack:** Java 21 · Spring Boot 3.5 · Spring AI 1.0.5 · Apache POI · SendGrid ·
+React 19 · Vite · Tailwind · Recharts.
 
-## How the discrepancies map
+---
 
-The upstream timesheet-generation step (your code, assumed already in place) writes
-the report with these fill colours on the **Fusion Reported Hours** cell:
+## Prerequisites
 
-| Colour            | Meaning                                       | Tool reports as     |
-| ----------------- | --------------------------------------------- | ------------------- |
-| Red               | Beeline hours **<** Fusion hours              | `UNDER_REPORT`      |
-| Yellow            | Beeline hours **>** Fusion hours              | `OVER_REPORT`       |
-| Teal / cyan `NA`  | No matching Beeline record this week          | `NO_RECORD_TEAL`    |
-| Grey `NA`         | No matching record (older format)             | `NO_RECORD_GREY`    |
+| Tool | Version | Install |
+| --- | --- | --- |
+| **Java JDK** | 21+ | `brew install openjdk@21` or [Temurin](https://adoptium.net/) |
+| **Node.js** | 20+ | `brew install node` |
+| **Anthropic API key** | — | Create at https://console.anthropic.com/settings/keys (free $5 credit on signup) |
+| **SendGrid API key + verified sender** | — | https://signup.sendgrid.com (free 100 emails/day) — see [SendGrid setup](#sendgrid-setup) below |
 
-## What's in the box
+Maven is **not** required — the repo ships with `mvnw` (Maven wrapper).
 
-```
-src/main/java/com/timesheets/ai/
-├── TimesheetsAiApplication.java     boot + ToolCallbackProvider registration
-├── config/
-│   ├── AppProperties.java           binds `app.*` properties
-│   └── ChatClientConfig.java        picks Anthropic or OpenAI by app.llm.provider
-├── excel/
-│   ├── CellColor.java
-│   ├── CellColorClassifier.java     POI ARGB → bucket by RGB distance
-│   └── TimesheetExcelParser.java    reads "Weekly Timesheet" sheet
-├── model/                           DiscrepancyType, DiscrepancyRow, ContractorSummary
-├── service/
-│   ├── DiscrepancyDetectionService.java   parser + group-by-contractor
-│   ├── EmailDraftingService.java          Spring AI ChatClient + prompt template
-│   └── SendGridEmailService.java          SendGrid REST send
-├── mcp/
-│   └── TimesheetTools.java          @Tool methods exposed via MCP
-├── cli/
-│   └── DiscrepancyCliRunner.java    one-shot run when --app.cli.run=true
-└── sample/
-    └── SampleReportGenerator.java   writes a sample .xlsx so you can test end-to-end
-```
+---
 
-## Setup
+## Quick start (5 minutes)
 
 ```bash
-cd /Users/uday/WORKSPACES/Timesheets-AI
+# 1. Clone
+git clone https://github.com/yudi451/timesheets-ai.git
+cd timesheets-ai
+
+# 2. Configure environment
 cp .env.example .env
-# Edit .env and set ANTHROPIC_API_KEY (or OPENAI_API_KEY) and optionally SENDGRID_API_KEY.
-# If SENDGRID_API_KEY is blank the app logs the email instead of sending it (dry-run).
+# Open .env and paste your real ANTHROPIC_API_KEY, SENDGRID_API_KEY, EMAIL_FROM
 
-# Generate a sample report so you have something to scan.
+# 3. Generate the sample report (one-time, file is gitignored)
 ./mvnw -q compile
-./mvnw -q exec:java \
-  -Dexec.mainClass=com.timesheets.ai.sample.SampleReportGenerator \
-  -Dexec.classpathScope=compile
-```
+./mvnw -q dependency:build-classpath -Dmdep.outputFile=.cp.txt 2>/dev/null
+java -cp "target/classes:$(cat .cp.txt)" \
+  com.timesheets.ai.sample.SampleReportGenerator ./sample-data/sample-beeline-fusion-report.xlsx
+rm .cp.txt
 
-Set environment variables before running:
-
-```bash
+# 4. Start the backend (terminal 1)
 set -a; source .env; set +a
+./mvnw spring-boot:run
+
+# 5. Start the frontend (terminal 2)
+cd frontend
+npm install
+npm run dev
+
+# 6. Open the dashboard
+open http://localhost:5173
 ```
 
-## Run modes
+You should see KPI cards, charts, an AI-generated insights panel, and a contractor
+breakdown table.
 
-### 1. CLI (no MCP client needed)
+---
 
-Useful for smoke-testing the full pipeline.
+## SendGrid setup
+
+SendGrid won't deliver email from an unverified address. Do this once:
+
+1. Sign up at https://signup.sendgrid.com
+2. **Settings → Sender Authentication → Single Sender Verification → Create New Sender**
+3. Use an email you actually control (e.g. your gmail). Fill in name + company fields.
+4. Check your inbox for the verification link → click it.
+5. **Settings → API Keys → Create API Key** → "Restricted Access" → grant **Mail Send: Full Access** only.
+6. Copy the key (starts with `SG.`) into `.env` as `SENDGRID_API_KEY=...`.
+7. Set `EMAIL_FROM=` in `.env` to the address you just verified.
+
+If `SENDGRID_API_KEY` is left blank, the app runs in **dry-run mode** and just logs
+the email body instead of sending — useful for testing without burning credits.
+
+---
+
+## Running modes
+
+### A. Dashboard (default — what most users want)
+
+`./mvnw spring-boot:run` on the backend, `npm run dev` in `frontend/`, browse to
+`http://localhost:5173`. The dashboard hits `/api/dashboard/summary` once on load.
+
+### B. CLI one-shot (for scheduled jobs or smoke tests)
 
 ```bash
 ./mvnw spring-boot:run -Dspring-boot.run.arguments="\
   --app.cli.run=true \
   --app.cli.excel-path=./sample-data/sample-beeline-fusion-report.xlsx \
-  --app.cli.recipient=uday.rajpurohit@gmail.com"
+  --app.cli.recipient=manager@example.com"
 ```
 
-You'll see the LLM-drafted subject + body in the logs and, if SendGrid is configured,
-the email will land in the recipient's inbox.
+This boots the app, scans the report, sends the email, and exits.
 
-### 2. MCP server
+### C. MCP server (for Claude Desktop / Claude Code chat)
 
-Just start the app — the MCP server is on by default at `http://localhost:8080/sse`.
+Start the backend normally (`./mvnw spring-boot:run`) — the MCP endpoint is at
+`http://localhost:8080/sse`. Wire it into your MCP client:
 
-```bash
-./mvnw spring-boot:run
-```
-
-The server exposes three tools:
-
-| Tool                       | What it does                                                                 |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| `checkDiscrepancies`       | Scan the report, return all flagged rows grouped by contractor.              |
-| `sendDiscrepancyEmail`     | Scan → LLM draft → SendGrid send. Recipient defaults to the configured one.  |
-| `getContractorSummary`     | Drill into one contractor by employee code.                                  |
-
-#### Wire it into Claude Desktop
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**Claude Desktop** — edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "timesheets-ai": {
-      "url": "http://localhost:8080/sse"
-    }
+    "timesheets-ai": { "url": "http://localhost:8080/sse" }
   }
 }
 ```
 
-Restart Claude Desktop. Then in any chat:
+Restart Claude Desktop, then chat:
 
-> Use the timesheets-ai tools to scan today's report and email me a summary.
+> Use timesheets-ai to scan today's report and tell me which contractor is most at risk.
 
-#### Wire it into Claude Code
-
+**Claude Code**:
 ```bash
 claude mcp add --transport sse timesheets-ai http://localhost:8080/sse
 ```
 
-## Switching LLM providers
+---
 
-```yaml
-# application.yml
-app:
-  llm:
-    provider: openai   # or: anthropic
+## What's in the repo
+
+```
+backend (Spring Boot)
+  src/main/java/com/timesheets/ai/
+    TimesheetsAiApplication.java     boot + MCP tool registration
+    cli/         CLI runner for one-shot mode
+    config/      AppProperties, ChatClientConfig
+    dashboard/   DashboardService, AiInsightsService, DTOs (for React)
+    excel/       CellColorClassifier, TimesheetExcelParser
+    mcp/         TimesheetTools  ← @Tool methods exposed via MCP
+    model/       DiscrepancyType / Row / ContractorSummary
+    sample/      SampleReportGenerator (writes a fixture .xlsx)
+    service/     DiscrepancyDetectionService, EmailDraftingService, SendGridEmailService
+    web/         DashboardController, CorsConfig
+  src/main/resources/
+    application.yml
+    prompts/discrepancy-email.st     LLM prompt for the email body
+
+frontend (React + Vite)
+  frontend/src/
+    App.tsx
+    api/dashboard.ts                 fetch + TS types matching backend DTOs
+    components/                      KpiCards, DiscrepancyPie, WeeklyTrendLine,
+                                     ContractorGrid, AiInsightsPanel, ReportsTabs
 ```
 
-Make sure the matching API key is exported. Both starters are on the classpath; the
-`ChatClientConfig` bean picks one based on this property and fails fast with a clear
-message if the chosen provider's API key is missing.
+---
 
-## Configuration knobs
+## What's real vs mocked
 
-All under `app.*` in `application.yml`:
+Designed for v1 where the upstream timesheet generator only emits per-row
+discrepancy highlights. Anything we don't yet receive is mocked **in one place**
+(top of `DashboardService.java`) so swapping in real data is a single-file edit.
 
-| Property                            | What it controls                                              |
-| ----------------------------------- | ------------------------------------------------------------- |
-| `app.llm.provider`                  | `anthropic` or `openai`                                       |
-| `app.email.default-recipient`       | Where `sendDiscrepancyEmail` ships to when no override given. |
-| `app.email.from-address`            | Verified SendGrid sender.                                     |
-| `app.excel.default-path`            | Used when an MCP tool is called without an explicit path.     |
-| `app.excel.sheet-name`              | Worksheet to scan. Defaults to `Weekly Timesheet`.            |
-| `app.excel.fusion-hours-column-index` | 0-indexed column holding the highlighted cell. Default `7`. |
+**Real:** discrepancy counts (Missing / Under / Over), contractor list, AI Insights
+(Claude-generated per load), email subject + body, SendGrid delivery.
+
+**Mocked:** Revenue at Risk ($95/hr assumed), Resolved %, PTO Mismatch, Billing
+Mismatch, Manager / Reports To hierarchy, weekly trend line (8-week curve), report
+tab descriptions.
+
+---
+
+## Configuration
+
+All in [`src/main/resources/application.yml`](src/main/resources/application.yml):
+
+| Property | Default | Purpose |
+| --- | --- | --- |
+| `spring.ai.model.chat` | `anthropic` | LLM provider — `anthropic` or `openai` |
+| `app.email.default-recipient` | `uday.rajpurohit@gmail.com` | Where the email goes if no override |
+| `app.email.from-address` | from `EMAIL_FROM` | Verified SendGrid sender |
+| `app.excel.default-path` | `./sample-data/sample-beeline-fusion-report.xlsx` | Used by MCP tools when no path is passed |
+| `app.excel.sheet-name` | `Weekly Timesheet` | Worksheet to scan |
+| `app.excel.fusion-hours-column-index` | `6` | 0-indexed column where the highlighted cell lives |
+
+To switch from Claude to OpenAI: change `spring.ai.model.chat: openai` and set
+`OPENAI_API_KEY` in `.env`. No code change needed.
+
+---
 
 ## Tests
 
@@ -153,14 +188,26 @@ All under `app.*` in `application.yml`:
 ./mvnw test
 ```
 
-The bundled `TimesheetExcelParserTest` generates a fixture workbook, runs it through
-the parser, and asserts that all four colour buckets are detected. It needs no API
-keys and no network.
+`TimesheetExcelParserTest` generates a fixture workbook, runs the parser, and
+asserts all four colour buckets are detected. No API keys, no network.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `OpenAI API key must be set` on startup | `spring.ai.model.chat` is set to `openai` but no key. Either set `OPENAI_API_KEY` or switch back to `anthropic`. |
+| `401 x-api-key header is required` | `ANTHROPIC_API_KEY` is empty or wrong. Verify `.env` has the full key (starts `sk-ant-api03-`, ~110 chars). |
+| `SendGrid 403 — from address does not match verified Sender Identity` | Your `EMAIL_FROM` isn't verified in SendGrid yet. See [SendGrid setup](#sendgrid-setup). |
+| Dashboard shows "Couldn't load" | Backend isn't running. Start it with `./mvnw spring-boot:run`. |
+| `Port 8080 already in use` | Another instance is running. Stop it (or change `server.port` in `application.yml`). |
+
+---
 
 ## Notes
 
-- The cell-colour classifier uses RGB-distance bucketing, so shading variants of the
-  same hue (e.g. light vs deep red) still match. Tune the centroids in
-  `CellColorClassifier` if your upstream generator uses different shades.
-- The LLM prompt template lives at `src/main/resources/prompts/discrepancy-email.st` —
-  edit it to change the email tone, length, or structure.
+- The cell-colour classifier uses RGB-distance bucketing — shading variants of the
+  same hue still match. Tune centroids in [`CellColorClassifier.java`](src/main/java/com/timesheets/ai/excel/CellColorClassifier.java) for different upstream colour schemes.
+- The LLM email prompt is at [`src/main/resources/prompts/discrepancy-email.st`](src/main/resources/prompts/discrepancy-email.st) — edit to change tone or structure.
+- The AI Insights prompt is inline at the top of [`AiInsightsService.java`](src/main/java/com/timesheets/ai/dashboard/AiInsightsService.java).
