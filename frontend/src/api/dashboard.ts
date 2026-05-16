@@ -71,3 +71,25 @@ export async function fetchDashboardSummary(): Promise<DashboardSummary> {
   }
   return res.json();
 }
+
+export interface SendEmailResult {
+  recipient: string;
+  totalDiscrepancyRows: number;
+  totalContractorsFlagged: number;
+  subject: string | null;
+  body: string | null;
+  sent: boolean;
+  statusMessage: string;
+}
+
+export async function sendDiscrepancyEmail(recipient?: string): Promise<SendEmailResult> {
+  const params = new URLSearchParams();
+  if (recipient) params.set('recipient', recipient);
+  const url = `/api/email/send-summary${params.toString() ? `?${params}` : ''}`;
+  const res = await fetch(url, { method: 'POST' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Send API failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}

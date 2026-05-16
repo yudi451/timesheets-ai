@@ -7,6 +7,11 @@ import { ContractorGrid } from './components/ContractorGrid';
 import { AiInsightsPanel } from './components/AiInsightsPanel';
 import { ReportsTabs } from './components/ReportsTabs';
 import { PtoMismatchPanel } from './components/PtoMismatchPanel';
+import { SendEmailButton } from './components/SendEmailButton';
+
+// Default recipient — matches app.email.default-recipient in application.yml.
+// If you wire this in dynamically later, hoist it onto DashboardSummary.
+const DEFAULT_RECIPIENT = 'uday.rajpurohit@gmail.com';
 
 export default function App() {
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -46,9 +51,12 @@ export default function App() {
   return (
     <div className="min-h-full">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <h1 className="text-xl font-semibold text-slate-900">Timesheets AI Dashboard</h1>
-          <p className="text-xs text-slate-500">Source: {data.reportPath}</p>
+        <div className="mx-auto flex max-w-7xl items-start justify-between gap-4 px-6 py-4">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">Timesheets AI Dashboard</h1>
+            <p className="text-xs text-slate-500">Source: {data.reportPath}</p>
+          </div>
+          <SendEmailButton defaultRecipient={DEFAULT_RECIPIENT} />
         </div>
       </header>
 
