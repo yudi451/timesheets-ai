@@ -9,10 +9,6 @@ import { ReportsTabs } from './components/ReportsTabs';
 import { PtoMismatchPanel } from './components/PtoMismatchPanel';
 import { SendEmailButton } from './components/SendEmailButton';
 
-// Default recipient — matches app.email.default-recipient in application.yml.
-// If you wire this in dynamically later, hoist it onto DashboardSummary.
-const DEFAULT_RECIPIENT = 'uday.rajpurohit@gmail.com';
-
 export default function App() {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +52,7 @@ export default function App() {
             <h1 className="text-xl font-semibold text-slate-900">Timesheets AI Dashboard</h1>
             <p className="text-xs text-slate-500">Source: {data.reportPath}</p>
           </div>
-          <SendEmailButton defaultRecipient={DEFAULT_RECIPIENT} />
+          <SendEmailButton defaultRecipient={data.defaultRecipient} />
         </div>
       </header>
 

@@ -96,7 +96,9 @@ public class DashboardService {
                 rows.size(), contractors.size(), ptoMismatchCount);
 
         return new DashboardSummary(
-                path.toString(), kpis, breakdown, trend,
+                path.toString(),
+                props.email().defaultRecipient(),
+                kpis, breakdown, trend,
                 contractorRows, ptoMismatches, insights, tabs);
     }
 

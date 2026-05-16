@@ -54,6 +54,7 @@ export interface ReportTab {
 
 export interface DashboardSummary {
   reportPath: string;
+  defaultRecipient: string;
   kpis: Kpis;
   discrepancyBreakdown: DiscrepancyBreakdown[];
   weeklyTrend: WeeklyTrendPoint[];

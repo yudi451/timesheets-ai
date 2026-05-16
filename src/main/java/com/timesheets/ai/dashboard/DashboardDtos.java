@@ -16,6 +16,7 @@ public final class DashboardDtos {
     /** Top-of-page summary the React app calls once on load. */
     public record DashboardSummary(
             String reportPath,
+            String defaultRecipient,
             Kpis kpis,
             List<DiscrepancyBreakdown> discrepancyBreakdown,
             List<WeeklyTrendPoint> weeklyTrend,
