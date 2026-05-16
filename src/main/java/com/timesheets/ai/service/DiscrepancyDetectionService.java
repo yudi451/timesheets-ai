@@ -1,9 +1,11 @@
 package com.timesheets.ai.service;
 
+import com.timesheets.ai.excel.PtoReportParser;
 import com.timesheets.ai.excel.TimesheetExcelParser;
 import com.timesheets.ai.model.ContractorDiscrepancySummary;
 import com.timesheets.ai.model.DiscrepancyRow;
 import com.timesheets.ai.model.DiscrepancyType;
+import com.timesheets.ai.model.PtoReportRow;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -18,13 +20,19 @@ import java.util.Map;
 public class DiscrepancyDetectionService {
 
     private final TimesheetExcelParser parser;
+    private final PtoReportParser ptoParser;
 
-    public DiscrepancyDetectionService(TimesheetExcelParser parser) {
+    public DiscrepancyDetectionService(TimesheetExcelParser parser, PtoReportParser ptoParser) {
         this.parser = parser;
+        this.ptoParser = ptoParser;
     }
 
     public List<DiscrepancyRow> detect(Path xlsxPath) throws IOException {
         return parser.parse(xlsxPath);
+    }
+
+    public List<PtoReportRow> detectPto(Path xlsxPath) throws IOException {
+        return ptoParser.parse(xlsxPath);
     }
 
     /**
@@ -45,7 +53,7 @@ public class DiscrepancyDetectionService {
 
             int under = 0, over = 0, missing = 0;
             for (DiscrepancyRow r : contractorRows) {
-                DiscrepancyType t = r.type();
+                DiscrepancyType t = r.discrepancyType();
                 if (t == DiscrepancyType.UNDER_REPORT) under++;
                 else if (t == DiscrepancyType.OVER_REPORT) over++;
                 else missing++; // NO_RECORD_TEAL + NO_RECORD_GREY

@@ -57,8 +57,10 @@ app:
     default-path: ./sample-data/sample-beeline-fusion-report.xlsx
     # Sheet name inside the workbook to scan
     sheet-name: Weekly Timesheet
-    # 0-indexed column that holds the highlighted Fusion Reported Hours value
-    fusion-hours-column-index: 6
+    # 0-indexed column that holds the highlighted Fusion Reported Hours value.
+    # Layout assumed: A=SOW#, B=CIO, C=SOW Name, D=Emp Code, E=Emp Name,
+    # F=Week Start, G=Week End, H=Fusion Hours (← index 7), I=Status, then Beeline side.
+    fusion-hours-column-index: 7
 
 logging:
   level:

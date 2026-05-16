@@ -6,6 +6,7 @@ import { WeeklyTrendLine } from './components/WeeklyTrendLine';
 import { ContractorGrid } from './components/ContractorGrid';
 import { AiInsightsPanel } from './components/AiInsightsPanel';
 import { ReportsTabs } from './components/ReportsTabs';
+import { PtoMismatchPanel } from './components/PtoMismatchPanel';
 
 export default function App() {
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -62,6 +63,8 @@ export default function App() {
         <AiInsightsPanel insights={data.aiInsights} />
 
         <ContractorGrid rows={data.contractors} />
+
+        <PtoMismatchPanel rows={data.ptoMismatches} />
 
         <ReportsTabs tabs={data.reportTabs} />
       </main>

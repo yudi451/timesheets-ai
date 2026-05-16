@@ -23,12 +23,21 @@ export interface ContractorRow {
   employeeName: string;
   reportsTo: string;
   manager: string;
+  emailId: string;
   underReport: number;
   overReport: number;
   missing: number;
   total: number;
   impactUsd: number;
   status: string;
+}
+
+export interface PtoRow {
+  employeeCode: string;
+  employeeName: string;
+  sowName: string;
+  ptoDays: number;
+  comments: string;
 }
 
 export interface AiInsights {
@@ -49,6 +58,7 @@ export interface DashboardSummary {
   discrepancyBreakdown: DiscrepancyBreakdown[];
   weeklyTrend: WeeklyTrendPoint[];
   contractors: ContractorRow[];
+  ptoMismatches: PtoRow[];
   aiInsights: AiInsights;
   reportTabs: ReportTab[];
 }

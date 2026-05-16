@@ -22,24 +22,29 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Reads the Weekly Timesheet sheet of a Beeline_Fusion_Report workbook
- * and returns the rows whose Fusion-Hours cell is highlighted.
+ * Reads the Weekly Timesheet sheet and returns the rows whose Fusion-Hours cell is highlighted.
  *
- * Column layout (matches the sample report; no-CIO variant from the second screenshot):
- *   A  SOW Number      (0)
- *   B  SOW Name        (1)
- *   C  Employee Code   (2)
- *   D  Employee Name   (3)
- *   E  Week Start Date (4)
- *   F  Week End Date   (5)
- *   G  Fusion Reported Hours  (6)   <-- the highlighted cell, configurable
- *   H  Status                  (7)
+ * Column layout (with CIO column — production layout, 17 columns):
+ *   A  SOW Number                (0)
+ *   B  CIO                        (1)
+ *   C  SOW Name                   (2)
+ *   D  Employee Code              (3)
+ *   E  Employee Name              (4)
+ *   F  Week Start Date (Fusion)   (5)
+ *   G  Week End Date   (Fusion)   (6)
+ *   H  Fusion Reported Hours      (7)   ← highlighted cell; configurable index
+ *   I  Status (Fusion)            (8)
+ *   J  Type                       (9)
+ *   K  Beeline Contractor Name    (10)
+ *   L  AU                         (11)
+ *   M  Week Start Date (Beeline)  (12)
+ *   N  Week End Date   (Beeline)  (13)
+ *   O  Beeline Reported Hours     (14)
+ *   P  Status (Beeline)           (15)
+ *   Q  Email ID                   (16)
  *
- * The exact column index of the highlighted "comparison" cell is configurable
- * (app.excel.fusion-hours-column-index) because different versions of the report
- * have shifted columns. The metadata columns (SOW Number, Employee Code, etc.)
- * are read relative to that index, so the parser stays aligned if the whole
- * layout shifts left or right by a known amount.
+ * All metadata columns are read relative to the configured fusion-hours index, so the
+ * parser stays aligned if the whole layout shifts left/right.
  */
 @Component
 public class TimesheetExcelParser {
@@ -71,25 +76,32 @@ public class TimesheetExcelParser {
                                 + ". Available: " + listSheetNames(workbook));
             }
 
-            int hoursCol = props.excel().fusionHoursColumnIndex();
-            // Other metadata columns are positioned relative to the hours column,
-            // matching the no-CIO layout: hours-6=SOW#, hours-5=SOW Name, etc.
-            int sowNumCol    = hoursCol - 6;
-            int sowNameCol   = hoursCol - 5;
-            int empCodeCol   = hoursCol - 4;
-            int empNameCol   = hoursCol - 3;
-            int weekStartCol = hoursCol - 2;
-            int weekEndCol   = hoursCol - 1;
-            int statusCol    = hoursCol + 1;
+            int fusionHoursCol = props.excel().fusionHoursColumnIndex();
+            // Offsets from fusionHoursCol — match the 17-col layout above.
+            int sowNumCol      = fusionHoursCol - 7;
+            int cioCol         = fusionHoursCol - 6;
+            int sowNameCol     = fusionHoursCol - 5;
+            int empCodeCol     = fusionHoursCol - 4;
+            int empNameCol     = fusionHoursCol - 3;
+            int weekStartCol   = fusionHoursCol - 2;
+            int weekEndCol     = fusionHoursCol - 1;
+            int fusionStatusCol     = fusionHoursCol + 1;
+            int typeCol             = fusionHoursCol + 2;
+            int beelineNameCol      = fusionHoursCol + 3;
+            int auCol               = fusionHoursCol + 4;
+            int beelineWeekStartCol = fusionHoursCol + 5;
+            int beelineWeekEndCol   = fusionHoursCol + 6;
+            int beelineHoursCol     = fusionHoursCol + 7;
+            int beelineStatusCol    = fusionHoursCol + 8;
+            int emailCol            = fusionHoursCol + 9;
 
             List<DiscrepancyRow> rows = new ArrayList<>();
 
-            // Skip header row (index 0).
             for (int r = 1; r <= sheet.getLastRowNum(); r++) {
                 Row row = sheet.getRow(r);
                 if (row == null) continue;
 
-                Cell hoursCell = row.getCell(hoursCol);
+                Cell hoursCell = row.getCell(fusionHoursCol);
                 if (hoursCell == null) continue;
 
                 CellColor color = classifier.classify(hoursCell);
@@ -97,15 +109,24 @@ public class TimesheetExcelParser {
                 if (type.isEmpty()) continue;
 
                 rows.add(new DiscrepancyRow(
-                        r + 1, // 1-indexed for human display
+                        r + 1,
                         readString(row, sowNumCol),
+                        readString(row, cioCol),
                         readString(row, sowNameCol),
                         readString(row, empCodeCol),
                         readString(row, empNameCol),
                         readString(row, weekStartCol),
                         readString(row, weekEndCol),
-                        readString(row, hoursCol),
-                        readString(row, statusCol),
+                        readString(row, fusionHoursCol),
+                        readString(row, fusionStatusCol),
+                        readString(row, typeCol),
+                        readString(row, beelineNameCol),
+                        readString(row, auCol),
+                        readString(row, beelineWeekStartCol),
+                        readString(row, beelineWeekEndCol),
+                        readString(row, beelineHoursCol),
+                        readString(row, beelineStatusCol),
+                        readString(row, emailCol),
                         type.get()
                 ));
             }
@@ -117,6 +138,7 @@ public class TimesheetExcelParser {
     }
 
     private String readString(Row row, int col) {
+        if (col < 0) return "";
         Cell cell = row.getCell(col);
         if (cell == null) return "";
         return formatter.formatCellValue(cell).trim();

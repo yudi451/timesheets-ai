@@ -20,6 +20,7 @@ public final class DashboardDtos {
             List<DiscrepancyBreakdown> discrepancyBreakdown,
             List<WeeklyTrendPoint> weeklyTrend,
             List<ContractorRow> contractors,
+            List<PtoRow> ptoMismatches,
             AiInsights aiInsights,
             List<ReportTab> reportTabs
     ) {}
@@ -45,12 +46,22 @@ public final class DashboardDtos {
             String employeeName,
             String reportsTo,
             String manager,
+            String emailId,
             int underReport,
             int overReport,
             int missing,
             int total,
             double impactUsd,
             String status
+    ) {}
+
+    /** One PTO Report row surfaced in the dashboard. */
+    public record PtoRow(
+            String employeeCode,
+            String employeeName,
+            String sowName,
+            int ptoDays,
+            String comments
     ) {}
 
     /** AI-generated bullet points. */

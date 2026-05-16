@@ -28,6 +28,7 @@ export function ContractorGrid({ rows }: { rows: ContractorRow[] }) {
               <th className="px-4 py-2 text-left font-medium">Reports To</th>
               <th className="px-4 py-2 text-left font-medium">Manager</th>
               <th className="px-4 py-2 text-left font-medium">Resource</th>
+              <th className="px-4 py-2 text-left font-medium">Email</th>
               <th className="px-4 py-2 text-right font-medium">Under</th>
               <th className="px-4 py-2 text-right font-medium">Over</th>
               <th className="px-4 py-2 text-right font-medium">Missing</th>
@@ -45,6 +46,7 @@ export function ContractorGrid({ rows }: { rows: ContractorRow[] }) {
                   <div className="font-medium text-slate-800">{r.employeeName}</div>
                   <div className="text-xs text-slate-400">#{r.employeeCode}</div>
                 </td>
+                <td className="px-4 py-2 text-slate-500 text-xs">{r.emailId || '—'}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{r.underReport}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{r.overReport}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{r.missing}</td>
@@ -61,7 +63,7 @@ export function ContractorGrid({ rows }: { rows: ContractorRow[] }) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-400">
                   No contractors flagged in the latest report.
                 </td>
               </tr>
